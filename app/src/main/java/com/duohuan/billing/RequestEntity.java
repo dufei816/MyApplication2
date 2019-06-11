@@ -28,8 +28,15 @@ package com.duohuan.billing;
 public class RequestEntity {//服务器推送启动拍照，客户端会返回消息，如果返回启动拍照失败需要进行重新发送
 
     /**
+     * -100 连接
+     *
      * 0 启动扫描器
      * 1 启动拍照流程
+     * <p>
+     * 888 启动导轨
+     * 889 停止导轨
+     * 887 启动上
+     * 886 启动下
      */
     private int mode;
 

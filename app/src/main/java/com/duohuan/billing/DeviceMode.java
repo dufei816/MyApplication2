@@ -10,7 +10,6 @@ import com.google.gson.Gson;
 import java.io.IOException;
 
 import io.reactivex.Observable;
-import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.schedulers.Schedulers;
 
 /**
@@ -47,12 +46,24 @@ public class DeviceMode {
     private static final String DUO_JI = "PWM1";
     private static final String JI_GUANG = "PWM0";
     private static Gson gson = new Gson();
+    private static Pwm duo;
+    private static Pwm jig;
 
-    public interface PwmListener {
-        void onComplete(String str);
+
+    static void close() {
+        Observable.just("")
+                .subscribeOn(Schedulers.newThread())
+                .subscribe(str -> {
+                    if (duo != null) {
+                        duo.close();
+                    }
+                    if (jig != null) {
+                        jig.close();
+                    }
+                }, Throwable::printStackTrace);
     }
 
-    public synchronized static void startDevice(PwmListener listener) {
+    synchronized static void startDevice(DeviceListener listener) {
         RequestEntity entity = new RequestEntity();
         entity.setMode(999);
         if (isOpen) {
@@ -100,8 +111,6 @@ public class DeviceMode {
         pwm.setPwmDutyCycle(rotate);
     }
 
-    private static Pwm duo;
-    private static Pwm jig;
 
     private static Observable<Pwm> openDuoJi() {
         if (duo == null) {

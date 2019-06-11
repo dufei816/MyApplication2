@@ -1,6 +1,8 @@
 package com.duohuan.billing;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -10,10 +12,16 @@ import com.google.gson.Gson;
 import com.koushikdutta.async.AsyncServer;
 import com.koushikdutta.async.http.WebSocket;
 import com.koushikdutta.async.http.server.AsyncHttpServer;
+import com.leinardi.android.things.driver.hcsr04.Hcsr04;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import io.reactivex.Observable;
+import io.reactivex.disposables.Disposable;
+import io.reactivex.schedulers.Schedulers;
 
 /**
  * Skeleton of an Android Things activity.
@@ -34,49 +42,60 @@ import java.util.List;
  *
  * @see <a href="https://github.com/androidthings/contrib-drivers#readme">https://github.com/androidthings/contrib-drivers#readme</a>
  */
+@SuppressLint("CheckResult")
 public class MainActivity extends Activity {
     private static final String TAG = "Things";
     private static final String PATH = "/storage/emulated/0/Download/";
-    private static final String DUO_JI = "PWM1";
 
     private static Gson gson = new Gson();
-
-//    private PlayerView playerView1;
-
     private static List<WebSocket> _sockets = new ArrayList<>();
 
+    private DeviceMotor motor;
 
+
+    @SuppressLint("CommitPrefEdits")
     @Override
     protected void onCreate(Bundle savedInstanceState) {//default frame rate
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-//        playerView1 = findViewById(R.id.player_view1);
-//        JzvdStd jzvdStd = findViewById(R.id.videoplayer);
-//        jzvdStd.setUp("http://jzvd.nathen.cn/c6e3dc12a1154626b3476d9bf3bd7266/6b56c5f0dc31428083757a45764763b0-5287d2089db37e62345123a1be272f8b.mp4"
-//                , "饺子闭眼睛" , Jzvd.SCREEN_WINDOW_NORMAL);
-//        jzvdStd.thumbImageView.setImage("http://p.qpic.cn/videoyun/0/2449_43b6f696980311e59ed467f22794e792_1/640");
-
-//
-//        SimpleExoPlayer player = ExoPlayerFactory.newSimpleInstance(this);
-//        playerView1.setPlayer(player);
-//        DataSource.Factory dataSourceFactory = new DefaultDataSourceFactory(this,
-//                Util.getUserAgent(this, "App"));
-//        MediaSource videoSource = new ProgressiveMediaSource.Factory(dataSourceFactory)
-//                .createMediaSource(Uri.fromFile(new File(PATH, "test2.mp4")));
-//        player.prepare(videoSource);
-//
-//        player.setPlayWhenReady(true);
         startServer(5000);
+        Log.e(TAG, "Start App");
+        motor = DeviceMotor.getInstance();
+        motor.setInitListener(((error, message) -> {
+            if (error == 0) {
+                Log.e(TAG, "Motor Run Success!");
+//                motor.reset();
+            } else {
+                Log.e(TAG, "Motor Run Error!" + message);
+            }
+        }));
+    }
+
+    private void sendMessage(String message) {
+        Log.e(TAG, "send=" + message);
+        for (WebSocket socket : _sockets) {
+            socket.send(message);
+        }
     }
 
     private WebSocket.StringCallback callback = str -> {
-        RequestEntity entity = gson.fromJson(str, RequestEntity.class);
+        Log.e(TAG, str);
+        RequestEntity entity = null;
+        try {
+            entity = gson.fromJson(str, RequestEntity.class);
+        } catch (Exception e) {
+            return;
+        }
         if (entity.getMode() == 0) {
-            DeviceMode.startDevice(message -> {
-                for (WebSocket socket : _sockets) {
-                    socket.send(message);
-                }
-            });
+            DeviceMode.startDevice(this::sendMessage);
+        } else if (entity.getMode() == 888) {
+            motor.findFace(this::sendMessage);
+        } else if (entity.getMode() == 889) {
+            motor.stop(this::sendMessage);
+        } else if (entity.getMode() == 887) {
+            motor.runZero();
+        } else if (entity.getMode() == 886) {
+            motor.findFaceBottom();
         }
     };
 
@@ -84,10 +103,12 @@ public class MainActivity extends Activity {
         AsyncHttpServer httpServer = new AsyncHttpServer();
         httpServer.setErrorCallback(ex -> Log.e("WebSocket", "An error occurred", ex));
         httpServer.listen(AsyncServer.getDefault(), port);
-
         httpServer.websocket("/ws", (webSocket, request) -> {
             _sockets.add(webSocket);
-            webSocket.send("收到");
+            Log.e(TAG, "连接->" + _sockets.size());
+            RequestEntity entity = new RequestEntity();
+            entity.setMode(-100);
+            webSocket.send(gson.toJson(entity));
             //Use this to clean up any references to your websocket
             webSocket.setClosedCallback(ex -> {
                 try {
@@ -104,5 +125,6 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        DeviceMode.close();
     }
 }

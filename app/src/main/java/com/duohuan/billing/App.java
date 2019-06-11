@@ -1,6 +1,7 @@
 package com.duohuan.billing;
 
 import android.app.Application;
+import android.content.SharedPreferences;
 
 /**
  * 　　　　　　　┏┛┻━━━┛┻┓ + +
@@ -29,8 +30,11 @@ import android.app.Application;
  */
 public class App extends Application {
 
+    public static SharedPreferences mSharedPreferences;
+
     @Override
     public void onCreate() {
         super.onCreate();
+        mSharedPreferences = getSharedPreferences("Device", MODE_PRIVATE);
     }
 }

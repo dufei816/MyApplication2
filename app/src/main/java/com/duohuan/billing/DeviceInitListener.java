@@ -22,33 +22,11 @@ package com.duohuan.billing;
  * 　　　　　　　　　　┃┫┫　┃┫┫
  * 　　　　　　　　　　┗┻┛　┗┻┛+ + + +
  * 创建人: 杜
- * 日期: 2019/5/13
- * 时间: 16:14
+ * 日期: 2019/5/28
+ * 时间: 11:01
  */
-public class Entity {
+public interface DeviceInitListener {
 
+    void onInit(int error,String message);
 
-    private int code;
-    private String message;
-
-    public Entity(int code, String message) {
-        this.code = code;
-        this.message = message;
-    }
-
-    public String getMessage() {
-        return message;
-    }
-
-    public void setMessage(String message) {
-        this.message = message;
-    }
-
-    public int getCode() {
-        return code;
-    }
-
-    public void setCode(int code) {
-        this.code = code;
-    }
 }
