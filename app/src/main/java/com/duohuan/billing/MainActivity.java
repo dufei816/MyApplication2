@@ -80,22 +80,20 @@ public class MainActivity extends Activity {
 
     private WebSocket.StringCallback callback = str -> {
         Log.e(TAG, str);
-        RequestEntity entity = null;
+        RequestEntity entity;
         try {
             entity = gson.fromJson(str, RequestEntity.class);
         } catch (Exception e) {
             return;
         }
-        if (entity.getMode() == 0) {
-            DeviceMode.startDevice(this::sendMessage);
-        } else if (entity.getMode() == 888) {
+        if (entity.getMode() == Config.START_LASER) {
+            DeviceMode.startDevice(entity, this::sendMessage);
+        } else if (entity.getMode() == Config.START_GUIDE) {
             motor.findFace(this::sendMessage);
-        } else if (entity.getMode() == 889) {
+        } else if (entity.getMode() == Config.END_GUIDE) {
             motor.stop(this::sendMessage);
-        } else if (entity.getMode() == 887) {
+        } else if (entity.getMode() == Config.RETURN_ZERO) {
             motor.runZero();
-        } else if (entity.getMode() == 886) {
-            motor.findFaceBottom();
         }
     };
 

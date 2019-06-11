@@ -63,12 +63,11 @@ public class DeviceMode {
                 }, Throwable::printStackTrace);
     }
 
-    synchronized static void startDevice(DeviceListener listener) {
-        RequestEntity entity = new RequestEntity();
-        entity.setMode(999);
+    synchronized static void startDevice(RequestEntity entity, DeviceListener listener) {
+        entity.setNumber(entity.getNumber() + 1);
         if (isOpen) {
-            entity.setErrorCode(1);
-            entity.setErrorMessage("设备正在运行");
+            entity.setErrorCode(Config.LASER_RUNNING_ERROR);
+            entity.setErrorMessage(Config.LASER_RUNNING_ERROR_MSG);
             listener.onComplete(gson.toJson(entity));
             return;
         }
@@ -77,8 +76,8 @@ public class DeviceMode {
             jiguang.setPwmDutyCycle(0);
             startDuoJi(duoji);
             jiguang.setPwmDutyCycle(100);
-            entity.setErrorCode(0);
-            entity.setErrorMessage("运行完成");
+            entity.setErrorCode(Config.SUCCESS);
+            entity.setErrorMessage(Config.SUCCESS_MSG);
             return entity;
         }).subscribeOn(Schedulers.newThread())
                 .subscribe(str -> {
@@ -88,14 +87,11 @@ public class DeviceMode {
                 }, throwable -> {
                     throwable.printStackTrace();
                     if (listener != null) {
-                        entity.setErrorCode(2);
+                        entity.setErrorCode(Config.LASER_ERROR);
                         entity.setErrorMessage(throwable.getMessage());
                         listener.onComplete(gson.toJson(entity));
                     }
-                }, () -> {
-                    Log.i(TAG, "运行完毕");
-                    isOpen = !isOpen;
-                });
+                }, () -> isOpen = !isOpen);
     }
 
     private static final float INIT_ROTATE = 47;

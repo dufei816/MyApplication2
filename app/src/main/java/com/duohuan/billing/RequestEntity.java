@@ -27,36 +27,19 @@ package com.duohuan.billing;
  */
 public class RequestEntity {//服务器推送启动拍照，客户端会返回消息，如果返回启动拍照失败需要进行重新发送
 
-    /**
-     * -100 连接
-     *
-     * 0 启动扫描器
-     * 1 启动拍照流程
-     * <p>
-     * 888 启动导轨
-     * 889 停止导轨
-     * 887 启动上
-     * 886 启动下
-     */
     private int mode;
-
-    /**
-     * 0 请求成功
-     * 其他均为异常
-     */
     private int errorCode;
-
-    /**
-     * 异常原因
-     */
     private String errorMessage;
-
-
-    /**
-     * 业务实体类Json
-     */
     private String entity;
+    private int number;
 
+    public int getNumber() {
+        return number;
+    }
+
+    public void setNumber(int number) {
+        this.number = number;
+    }
 
     public int getMode() {
         return mode;
