@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.util.Log;
 
 import com.google.android.things.pio.PeripheralManager;
@@ -16,6 +17,7 @@ import com.leinardi.android.things.driver.hcsr04.Hcsr04;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -49,6 +51,7 @@ public class MainActivity extends Activity {
 
     private static Gson gson = new Gson();
     private static List<WebSocket> _sockets = new ArrayList<>();
+    private static HashMap<String, WebSocket> _mapSockets = new HashMap<>();
 
     private DeviceMotor motor;
 
@@ -102,11 +105,11 @@ public class MainActivity extends Activity {
         httpServer.setErrorCallback(ex -> Log.e("WebSocket", "An error occurred", ex));
         httpServer.listen(AsyncServer.getDefault(), port);
         httpServer.websocket("/ws", (webSocket, request) -> {
+            String protocol = request.getHeaders().get("Protocol");
+            if (protocol != null && !TextUtils.isEmpty(protocol)) {
+                _mapSockets.put(protocol, webSocket);
+            }
             _sockets.add(webSocket);
-            Log.e(TAG, "连接->" + _sockets.size());
-            RequestEntity entity = new RequestEntity();
-            entity.setMode(-100);
-            webSocket.send(gson.toJson(entity));
             //Use this to clean up any references to your websocket
             webSocket.setClosedCallback(ex -> {
                 try {
