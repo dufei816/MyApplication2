@@ -50,7 +50,6 @@ public class MainActivity extends Activity {
     private static final String PATH = "/storage/emulated/0/Download/";
 
     private static Gson gson = new Gson();
-    private static List<WebSocket> _sockets = new ArrayList<>();
     private static HashMap<String, WebSocket> _mapSockets = new HashMap<>();
 
     private DeviceMotor motor;
@@ -67,18 +66,20 @@ public class MainActivity extends Activity {
         motor.setInitListener(((error, message) -> {
             if (error == 0) {
                 Log.e(TAG, "Motor Run Success!");
-//                motor.reset();
             } else {
                 Log.e(TAG, "Motor Run Error!" + message);
             }
         }));
     }
 
-    private void sendMessage(String message) {
-        Log.e(TAG, "send=" + message);
-        for (WebSocket socket : _sockets) {
-            socket.send(message);
+    private boolean sendMessage(String protocol, String message) {
+        WebSocket webSocket = _mapSockets.get(protocol);
+        if (webSocket != null && webSocket.isOpen()) {
+            Log.e(TAG, "send=" + message);
+            webSocket.send(message);
+            return true;
         }
+        return false;
     }
 
     private WebSocket.StringCallback callback = str -> {
@@ -89,14 +90,29 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             return;
         }
-        if (entity.getMode() == Config.START_LASER) {
-            DeviceMode.startDevice(entity, this::sendMessage);
-        } else if (entity.getMode() == Config.START_GUIDE) {
-            motor.findFace(this::sendMessage);
-        } else if (entity.getMode() == Config.END_GUIDE) {
-            motor.stop(this::sendMessage);
-        } else if (entity.getMode() == Config.RETURN_ZERO) {
+        int mode = entity.getMode();
+        if (mode == Config.START_LASER) {//启动激光
+            DeviceMode.startDevice(entity, msg -> sendMessage(Config.TAKE_PIC, msg));
+        } else if (mode == Config.START_GUIDE) {//启动导轨
+            motor.findFace(entity,msg-> sendMessage(Config.FACE,msg));
+            motor.setFindFaceListener(() -> {//Stop
+                entity.setMode(Config.STOP_GUIDE);
+                sendMessage(Config.FACE, gson.toJson(entity));
+            });
+        } else if (mode == Config.END_GUIDE) {//停止导轨
+            motor.stop();
+        } else if (mode == Config.RETURN_ZERO) {//回归原点
             motor.runZero();
+        } else if (mode == Config.START_FIND_FACE) {
+            boolean send = sendMessage(Config.FACE, gson.toJson(entity));
+            entity.setNumber(entity.getNumber() + 1);
+            if (!send) {
+                entity.setErrorCode(Config.SEND_ERROR);
+                sendMessage(Config.TAKE_PIC, gson.toJson(entity));
+            } else {
+                entity.setErrorCode(Config.SUCCESS);
+                sendMessage(Config.TAKE_PIC, gson.toJson(entity));
+            }
         }
     };
 
@@ -109,14 +125,13 @@ public class MainActivity extends Activity {
             if (protocol != null && !TextUtils.isEmpty(protocol)) {
                 _mapSockets.put(protocol, webSocket);
             }
-            _sockets.add(webSocket);
             //Use this to clean up any references to your websocket
             webSocket.setClosedCallback(ex -> {
                 try {
                     if (ex != null)
                         Log.e("WebSocket", "An error occurred", ex);
                 } finally {
-                    _sockets.remove(webSocket);
+                    _mapSockets.remove(protocol);
                 }
             });
             webSocket.setStringCallback(callback);

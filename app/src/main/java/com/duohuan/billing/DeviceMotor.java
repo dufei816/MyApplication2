@@ -42,6 +42,7 @@ import io.reactivex.schedulers.Schedulers;
 @SuppressLint("CheckResult")
 public class DeviceMotor {
 
+    private static final Object obj = new Object();
     private static DeviceMotor deviceMotor;
     private static final String TAG = "DeviceMotor";
 
@@ -62,6 +63,15 @@ public class DeviceMotor {
     private Gpio gpio_pul;
 
     private DeviceInitListener initListener;
+    private FindFaceListener findFaceListener;
+
+    public void setFindFaceListener(FindFaceListener findFaceListener) {
+        this.findFaceListener = findFaceListener;
+    }
+
+    public interface FindFaceListener {
+        void onStop();
+    }
 
     //安全机制
     private boolean isSafety;
@@ -70,14 +80,13 @@ public class DeviceMotor {
     //是否是手动停止
     private boolean isManual;
     //是否初始化完成
-    private boolean init;
+    private boolean init = false;
 
     private RunThread myRunThread = new RunThread(false);
-    private RunCountThread runCountThread = null;
     private InitThread initThread = new InitThread();
+
     private ReadThread readThread = new ReadThread();
     private Hcsr04 hcsr04;
-
 
     private class InitThread extends Thread {
         @Override
@@ -137,38 +146,36 @@ public class DeviceMotor {
             Log.e(TAG, "direction=" + direction);
         }
 
-        @SuppressLint("CommitPrefEdits")
         @Override
         public void run() {
             super.run();
             try {
                 runing = true;//启动
-                isSafety = false;
                 isManual = false;//手动初始
                 gpio_dir.setValue(direction);
                 while (true) {
                     if (interrupted()) {
                         runing = false;
-                        if (!direction && !isManual && !isSafety) {//上升 未手动停止 --->复位
-                            runGuide();
+                        if (!direction) {//上升
+                            if (!isManual) {//自动停止
+                                runGuide();//--->复位
+                            } else {
+                                findFaceListener = null;
+                            }
+                        } else {//下降
+                            if (!isManual) {//自动停止
+                                if (findFaceListener != null) {
+                                    findFaceListener.onStop();
+                                }
+                            }
+                            findFaceListener = null;
                         }
+                        runing = false;
                         break;
                     }
-                    gpio_pul.setValue(true);
-                    busyWaitMicros(1);
-                    gpio_pul.setValue(false);
-                    if (direction) {
-                        current_count -= 1;
-                        if (current_count <= 0) {
-                            Log.e(TAG, "MIN current_count=" + current_count);
-                            myRunThread.interrupt();
-                        }
-                    } else {
-                        current_count += 1;
-                        if (current_count >= MAX_COUNT) {
-                            Log.e(TAG, "MAX current_count=" + current_count);
-                            myRunThread.interrupt();
-                        }
+                    oneStep();
+                    if (!safety(direction)) {//不安全
+                        this.interrupt();
                     }
                 }
             } catch (IOException e) {
@@ -176,73 +183,30 @@ public class DeviceMotor {
             }
         }
     }
-
-    private class RunCountThread extends Thread {
-
-        private boolean direction;
-        private int count;
-
-        public RunCountThread(boolean direction, int count) {
-            this.direction = direction;
-            this.count = count;
-        }
-
-        @Override
-        public void run() {
-            super.run();
-            runing = true;
-            try {
-                gpio_dir.setValue(direction);
-                for (int i = 0; i < count; i++) {
-                    gpio_pul.setValue(true);
-                    busyWaitMicros(1);
-                    gpio_pul.setValue(false);
-                    if (direction) {
-                        current_count -= 1;
-                    } else {
-                        current_count += 1;
-                    }
-                    if (current_count >= MAX_COUNT) {
-                        runing = false;
-                        return;
-                    } else if (current_count <= 0) {
-                        runing = false;
-                        return;
-                    }
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
 
     private DeviceMotor() {
+
     }
 
-    public void findFace(DeviceListener listener) {
-        RequestEntity entity = new RequestEntity();
-        entity.setMode(888);
+    public void findFace(RequestEntity entity, DeviceListener listener) {
+        entity.setNumber(entity.getNumber() + 1);
         if (!init) {
-            entity.setErrorCode(777);
-            entity.setErrorMessage("初始化失败!");
+            entity.setErrorCode(Config.GUIDE_INIT_ERROR);
+            entity.setErrorMessage(Config.GUIDE_INIT_ERROR_MSG);
             listener.onComplete(gson.toJson(entity));
             return;
         } else if (runing) {
-            entity.setErrorCode(777);
-            entity.setErrorMessage("导轨正在使用!");
+            entity.setErrorCode(Config.GUIDE_RUNNING_ERROR);
+            entity.setErrorMessage(Config.GUIDE_RUNNING_ERROR_MSG);
             listener.onComplete(gson.toJson(entity));
             return;
         } else if (current_count == -1) {
-            entity.setErrorCode(777);
-            entity.setErrorMessage("导轨未回到原点!");
+            entity.setErrorCode(Config.GUIDE_RETURN_ZERO);
+            entity.setErrorMessage(Config.GUIDE_RETURN_ZERO_MSG);
             listener.onComplete(gson.toJson(entity));
             return;
         }
         runGuide();
-        entity.setErrorCode(700);
-        entity.setErrorMessage("启动导轨");
-        listener.onComplete(gson.toJson(entity));
     }
 
     void findFaceTop() {
@@ -277,15 +241,21 @@ public class DeviceMotor {
         }
     }
 
-    public void runZero(){
-        if (myRunThread.getState() != Thread.State.NEW || myRunThread.getState() == Thread.State.RUNNABLE) {
-            myRunThread.interrupt();
-            myRunThread = new RunThread(true);
+    public void runZero() {
+        synchronized (obj) {
+            if (myRunThread.getState() != Thread.State.NEW || myRunThread.getState() == Thread.State.RUNNABLE) {
+                myRunThread.interrupt();
+                isManual = true;
+                myRunThread = new RunThread(true);
+            }
+            myRunThread.start();
         }
-        myRunThread.start();
     }
 
 
+    /**
+     * 启动导轨
+     */
     private void runGuide() {
         if (myRunThread.getState() != Thread.State.NEW || myRunThread.getState() == Thread.State.RUNNABLE) {
             myRunThread.interrupt();
@@ -298,16 +268,47 @@ public class DeviceMotor {
         myRunThread.start();
     }
 
-    public void stop(DeviceListener listener) {
-        if (myRunThread != null) {
-            isManual = true;
-            myRunThread.interrupt();
-            RequestEntity entity = new RequestEntity();
-            entity.setErrorCode(889);
-            entity.setErrorMessage("停止");
-            listener.onComplete(gson.toJson(entity));
+    public void stop() {
+        synchronized (obj) {
+            if (myRunThread != null) {
+                isManual = true;
+                myRunThread.interrupt();
+            }
         }
     }
+
+
+    /**
+     * 安全判断
+     *
+     * @param direction
+     * @return
+     */
+    private boolean safety(boolean direction) {
+        if (direction) {
+            current_count -= 1;
+            return current_count > 0;
+        } else {
+            current_count += 1;
+            return current_count < MAX_COUNT;
+        }
+    }
+
+    /**
+     * 前进1步
+     */
+    private void oneStep() {
+        if (init) {
+            try {
+                gpio_pul.setValue(true);
+                busyWaitMicros(1);
+                gpio_pul.setValue(false);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
 
     private void init() {
         Observable.zip(openGpio(ENA), openGpio(DIR), openGpio(PUL), (ena, dir, pul) -> {
@@ -344,12 +345,23 @@ public class DeviceMotor {
         return deviceMotor;
     }
 
+    /**
+     * 初始化
+     *
+     * @param initListener
+     */
     public void setInitListener(DeviceInitListener initListener) {
         this.initListener = initListener;
         new Thread(this::init).start();
     }
 
 
+    /**
+     * 打开io口
+     *
+     * @param name
+     * @return
+     */
     private Observable<Gpio> openGpio(String name) {
         return Observable.defer(() -> {
             PeripheralManager manager = PeripheralManager.getInstance();
@@ -359,6 +371,11 @@ public class DeviceMotor {
     }
 
 
+    /**
+     * 延时
+     *
+     * @param micros
+     */
     private void busyWaitMicros(long micros) {
         long start = System.nanoTime();
         long waitUntil = start + (micros * 1000);
