@@ -91,28 +91,37 @@ public class MainActivity extends Activity {
             return;
         }
         int mode = entity.getMode();
-        if (mode == Config.START_LASER) {//启动激光
-            DeviceMode.startDevice(entity, msg -> sendMessage(Config.TAKE_PIC, msg));
-        } else if (mode == Config.START_GUIDE) {//启动导轨
-            motor.findFace(entity,msg-> sendMessage(Config.FACE,msg));
-            motor.setFindFaceListener(() -> {//Stop
-                entity.setMode(Config.STOP_GUIDE);
-                sendMessage(Config.FACE, gson.toJson(entity));
-            });
-        } else if (mode == Config.END_GUIDE) {//停止导轨
-            motor.stop();
-        } else if (mode == Config.RETURN_ZERO) {//回归原点
-            motor.runZero();
-        } else if (mode == Config.START_FIND_FACE) {
-            boolean send = sendMessage(Config.FACE, gson.toJson(entity));
-            entity.setNumber(entity.getNumber() + 1);
-            if (!send) {
-                entity.setErrorCode(Config.SEND_ERROR);
-                sendMessage(Config.TAKE_PIC, gson.toJson(entity));
-            } else {
-                entity.setErrorCode(Config.SUCCESS);
-                sendMessage(Config.TAKE_PIC, gson.toJson(entity));
-            }
+        switch (mode) {
+            case Config.START_LASER://启动激光
+                DeviceMode.startDevice(entity, msg -> sendMessage(Config.TAKE_PIC, msg));
+                break;
+            case Config.START_GUIDE://启动导轨
+                motor.findFace(entity, msg -> sendMessage(Config.FACE, msg));
+                motor.setFindFaceListener(() -> {//Stop
+                    entity.setMode(Config.STOP_GUIDE);
+                    sendMessage(Config.FACE, gson.toJson(entity));
+                });
+                break;
+            case Config.END_GUIDE://停止导轨
+                motor.stop();
+                break;
+            case Config.RETURN_ZERO://回归原点
+                motor.runZero();
+                break;
+            case Config.START_FIND_FACE://人脸采集
+                boolean send = sendMessage(Config.FACE, gson.toJson(entity));
+                entity.setNumber(entity.getNumber() + 1);
+                if (!send) {
+                    entity.setErrorCode(Config.SEND_ERROR);
+                    sendMessage(Config.TAKE_PIC, gson.toJson(entity));
+                } else {
+                    entity.setErrorCode(Config.SUCCESS);
+                    sendMessage(Config.TAKE_PIC, gson.toJson(entity));
+                }
+                break;
+            case Config.BILLING_UPDATE:
+                sendMessage(Config.BILLING, gson.toJson(entity));
+                break;
         }
     };
 

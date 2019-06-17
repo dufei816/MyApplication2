@@ -4,7 +4,9 @@ public class Config {
 
     public static final String TAKE_PIC = "TakePic";
     public static final String FACE = "Face";
+    public static final String BILLING = "Billing";
 
+    public static final int BILLING_UPDATE = 4;
 
     //------------start Things 100~200--------------
     //启动激光
