@@ -32,6 +32,24 @@ public class RequestEntity {//服务器推送启动拍照，客户端会返回�
     private String errorMessage;
     private String entity;
     private int number;
+    private String userId;
+    private String messageId;
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId;
+    }
+
+    public String getMessageId() {
+        return messageId;
+    }
+
+    public void setMessageId(String messageId) {
+        this.messageId = messageId;
+    }
 
     public int getNumber() {
         return number;
