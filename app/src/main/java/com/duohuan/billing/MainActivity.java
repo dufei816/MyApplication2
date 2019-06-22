@@ -2,28 +2,16 @@ package com.duohuan.billing;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
 
-import com.google.android.things.pio.PeripheralManager;
-import com.google.android.things.pio.Pwm;
 import com.google.gson.Gson;
 import com.koushikdutta.async.AsyncServer;
 import com.koushikdutta.async.http.WebSocket;
 import com.koushikdutta.async.http.server.AsyncHttpServer;
-import com.leinardi.android.things.driver.hcsr04.Hcsr04;
 
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-
-import io.reactivex.Observable;
-import io.reactivex.disposables.Disposable;
-import io.reactivex.schedulers.Schedulers;
 
 /**
  * Skeleton of an Android Things activity.
@@ -52,7 +40,8 @@ public class MainActivity extends Activity {
     private static Gson gson = new Gson();
     private static HashMap<String, WebSocket> _mapSockets = new HashMap<>();
 
-    private DeviceMotor motor;
+    private DeviceMotor deviceMotor;
+    private DeviceMode deviceMode;
 
 
     @SuppressLint("CommitPrefEdits")
@@ -62,8 +51,9 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
         startServer(5000);
         Log.e(TAG, "Start App");
-        motor = DeviceMotor.getInstance();
-        motor.setInitListener(((error, message) -> {
+        deviceMode = DeviceMode.getInstance();
+        deviceMotor = DeviceMotor.getInstance();
+        deviceMotor.setInitListener(((error, message) -> {
             if (error == 0) {
                 Log.e(TAG, "Motor Run Success!");
             } else {
@@ -93,20 +83,20 @@ public class MainActivity extends Activity {
         int mode = entity.getMode();
         switch (mode) {
             case Config.START_LASER://启动激光
-                DeviceMode.startDevice(entity, msg -> sendMessage(Config.TAKE_PIC, msg));
+                deviceMode.startDevice(entity, msg -> sendMessage(Config.TAKE_PIC, msg));
                 break;
             case Config.START_GUIDE://启动导轨
-                motor.findFace(entity, msg -> sendMessage(Config.FACE, msg));
-                motor.setFindFaceListener(() -> {//Stop
+                deviceMotor.findFace(entity, msg -> sendMessage(Config.FACE, msg));
+                deviceMotor.setFindFaceListener(() -> {//Stop
                     entity.setMode(Config.STOP_GUIDE);
                     sendMessage(Config.FACE, gson.toJson(entity));
                 });
                 break;
             case Config.END_GUIDE://停止导轨
-                motor.stop();
+                deviceMotor.stop();
                 break;
             case Config.RETURN_ZERO://回归原点
-                motor.runZero();
+                deviceMotor.runZero();
                 break;
             case Config.START_FIND_FACE://人脸采集
                 boolean send = sendMessage(Config.FACE, gson.toJson(entity));
@@ -150,6 +140,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        DeviceMode.close();
+        deviceMode.close();
+        deviceMotor.close();
     }
 }

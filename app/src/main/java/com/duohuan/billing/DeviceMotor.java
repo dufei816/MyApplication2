@@ -65,12 +65,36 @@ public class DeviceMotor {
     private DeviceInitListener initListener;
     private FindFaceListener findFaceListener;
 
+
+    public void close() {
+        Observable.just("")
+                .subscribeOn(Schedulers.newThread())
+                .subscribe(str -> {
+                    if (gpio_ena != null) {
+                        gpio_ena.close();
+                    }
+                    if (gpio_dir != null) {
+                        gpio_dir.close();
+                    }
+                    if (gpio_pul != null) {
+                        gpio_pul.close();
+                    }
+                    if (myRunThread.getState() == Thread.State.RUNNABLE) {
+                        myRunThread.interrupt();
+                    }
+                }, Throwable::printStackTrace);
+    }
+
     public void setFindFaceListener(FindFaceListener findFaceListener) {
         this.findFaceListener = findFaceListener;
     }
 
     public interface FindFaceListener {
         void onStop();
+    }
+
+    public void test() {
+        runGuide();
     }
 
     //安全机制

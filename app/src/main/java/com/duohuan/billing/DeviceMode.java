@@ -40,17 +40,62 @@ import io.reactivex.schedulers.Schedulers;
 @SuppressLint("CheckResult")
 public class DeviceMode {
     private static final String TAG = "DeviceMode";
-
-    private static boolean isOpen = false;
-    private static PeripheralManager manager = PeripheralManager.getInstance();
+    private static final Object obj = new Object();
+    private boolean init = false;
+    private boolean isOpen = false;
+    private PeripheralManager manager;
     private static final String DUO_JI = "PWM1";
     private static final String JI_GUANG = "PWM0";
-    private static Gson gson = new Gson();
-    private static Pwm duo;
-    private static Pwm jig;
+    private Gson gson = new Gson();
+    private Pwm duo;
+    private Pwm jig;
+
+    private static final float INIT_ROTATE = 51;
+    private static float rotate = INIT_ROTATE;
+
+    private static DeviceMode deviceMode1;
 
 
-    static void close() {
+    private DeviceMode() {
+        init();
+    }
+
+    private void init() {
+        Observable.just("")
+                .subscribeOn(Schedulers.newThread())
+                .subscribe(s -> {
+                    manager = PeripheralManager.getInstance();
+                    duo = manager.openPwm(DUO_JI);
+                    duo.setPwmFrequencyHz(330);
+                    duo.setPwmDutyCycle(rotate);
+                    duo.setEnabled(true);
+
+                    jig = manager.openPwm(JI_GUANG);
+                    jig.setPwmFrequencyHz(330);
+                    jig.setPwmDutyCycle(0);
+                    jig.setEnabled(true);
+
+                    init = true;
+                    Log.e(TAG, "Init Success!");
+                }, error -> {
+                    init = false;
+                    error.printStackTrace();
+                });
+    }
+
+
+    public static DeviceMode getInstance() {
+        if (deviceMode1 == null) {
+            synchronized (obj) {
+                if (deviceMode1 == null) {
+                    deviceMode1 = new DeviceMode();
+                }
+            }
+        }
+        return deviceMode1;
+    }
+
+    public void close() {
         Observable.just("")
                 .subscribeOn(Schedulers.newThread())
                 .subscribe(str -> {
@@ -63,7 +108,7 @@ public class DeviceMode {
                 }, Throwable::printStackTrace);
     }
 
-    synchronized static void startDevice(RequestEntity entity, DeviceListener listener) {
+    public synchronized void startDevice(RequestEntity entity, DeviceListener listener) {
         entity.setNumber(entity.getNumber() + 1);
         if (isOpen) {
             entity.setErrorCode(Config.LASER_RUNNING_ERROR);
@@ -71,33 +116,33 @@ public class DeviceMode {
             listener.onComplete(gson.toJson(entity));
             return;
         }
+        if (!init) {
+            entity.setErrorCode(Config.LASER_ERROR);
+            entity.setErrorMessage("初始化异常！");
+            listener.onComplete(gson.toJson(entity));
+            return;
+        }
         isOpen = true;
-        Observable.zip(openDuoJi(), openJiGuang(), (duoji, jiguang) -> {
-            jiguang.setPwmDutyCycle(0);
-            startDuoJi(duoji);
-            jiguang.setPwmDutyCycle(100);
-            entity.setErrorCode(Config.SUCCESS);
-            entity.setErrorMessage(Config.SUCCESS_MSG);
-            return entity;
-        }).subscribeOn(Schedulers.newThread())
-                .subscribe(str -> {
-                    if (listener != null) {
-                        listener.onComplete(gson.toJson(entity));
-                    }
-                }, throwable -> {
-                    throwable.printStackTrace();
-                    if (listener != null) {
-                        entity.setErrorCode(Config.LASER_ERROR);
-                        entity.setErrorMessage(throwable.getMessage());
-                        listener.onComplete(gson.toJson(entity));
-                    }
-                }, () -> isOpen = !isOpen);
+        Observable.just("")
+                .subscribeOn(Schedulers.newThread())
+                .subscribe(s -> {
+                    jig.setPwmDutyCycle(100);
+                    startDuoJi(duo);
+                    jig.setPwmDutyCycle(0);
+                    entity.setErrorCode(Config.SUCCESS);
+                    entity.setErrorMessage(Config.SUCCESS_MSG);
+                    listener.onComplete(gson.toJson(entity));
+                }, error -> {
+                    entity.setErrorCode(Config.LASER_ERROR);
+                    entity.setErrorMessage(error.getMessage());
+                    listener.onComplete(gson.toJson(entity));
+                }, () -> isOpen = false);
     }
 
-    private static final float INIT_ROTATE = 47;
-    private static float rotate = INIT_ROTATE;
+    //    private static final float INIT_ROTATE = 47;
 
-    private static void startDuoJi(Pwm pwm) throws IOException, InterruptedException {
+
+    private void startDuoJi(Pwm pwm) throws IOException, InterruptedException {
         for (int i = 0; i < 20; i++) {
             rotate += 1.1;
             pwm.setPwmDutyCycle(rotate);
@@ -107,32 +152,4 @@ public class DeviceMode {
         pwm.setPwmDutyCycle(rotate);
     }
 
-
-    private static Observable<Pwm> openDuoJi() {
-        if (duo == null) {
-            return Observable.defer(() -> {
-                duo = manager.openPwm(DUO_JI);
-                duo.setPwmFrequencyHz(330);
-                duo.setPwmDutyCycle(rotate);
-                duo.setEnabled(true);
-                return Observable.just(duo);
-            });
-        } else {
-            return Observable.just(duo);
-        }
-    }
-
-    private static Observable<Pwm> openJiGuang() {
-        if (jig == null) {
-            return Observable.defer(() -> {
-                jig = manager.openPwm(JI_GUANG);
-                jig.setPwmFrequencyHz(330);
-                jig.setPwmDutyCycle(10);
-                jig.setEnabled(true);
-                return Observable.just(jig);
-            });
-        } else {
-            return Observable.just(jig);
-        }
-    }
 }
