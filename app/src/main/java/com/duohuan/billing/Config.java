@@ -25,6 +25,8 @@ public class Config {
     public static final int START_FIND_FACE = 106;
     //自动停止
     public static final int STOP_GUIDE = 107;
+    //人脸采集回复
+    public static final int FIND_FACE_BACK = 108;
 
     //----------------error Code-----------------
     public static final int GUIDE_INIT_ERROR = 1;

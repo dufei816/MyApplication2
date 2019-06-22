@@ -99,18 +99,13 @@ public class MainActivity extends Activity {
                 deviceMotor.runZero();
                 break;
             case Config.START_FIND_FACE://人脸采集
-                boolean send = sendMessage(Config.FACE, gson.toJson(entity));
-                entity.setNumber(entity.getNumber() + 1);
-                if (!send) {
-                    entity.setErrorCode(Config.SEND_ERROR);
-                    sendMessage(Config.TAKE_PIC, gson.toJson(entity));
-                } else {
-                    entity.setErrorCode(Config.SUCCESS);
-                    sendMessage(Config.TAKE_PIC, gson.toJson(entity));
-                }
+                sendMessage(Config.FACE, gson.toJson(entity));
                 break;
-            case Config.BILLING_UPDATE:
+            case Config.BILLING_UPDATE://广告更新
                 sendMessage(Config.BILLING, gson.toJson(entity));
+                break;
+            case Config.FIND_FACE_BACK://人脸采集反馈
+                sendMessage(Config.TAKE_PIC, gson.toJson(entity));
                 break;
         }
     };
